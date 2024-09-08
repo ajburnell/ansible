@@ -64,7 +64,7 @@
         - nginx
         - certbot
         - python3-certbot-nginx
-        - python3-mysqldb
+        - python3-mysqlclient
     become: yes
 
     ### SECURE MARIA DB ###
