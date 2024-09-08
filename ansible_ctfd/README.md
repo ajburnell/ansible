@@ -24,7 +24,7 @@ sudo useradd ctfd -m -s /bin/bash
 sudo usermod -aG sudo ctfd
 sudo mkdir -p /home/ctfd/.ssh
 # Public Key is created and uploaded to /tmp
-sudo cp /tmp/public_key_filename /home/ctfd/.ssh/authorized_keys",
+sudo cp /tmp/public_key_filename /home/ctfd/.ssh/authorized_keys
 sudo chown -R ctfd:ctfd /home/ctfd/.ssh
 sudo chmod 700 /home/ctfd/.ssh && sudo chmod 600 /home/ctfd/.ssh/authorized_keys
 sudo su -c \"echo 'ctfd ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ctfd\"
