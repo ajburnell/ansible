@@ -15,10 +15,10 @@
       name: "*"
       state: latest
 
-  - name: Ensure the crb repository is enabled
-    community.general.dnf_config_manager:
-      name: crb
-      state: enabled
+#  - name: Ensure the crb repository is enabled
+#    community.general.dnf_config_manager:
+#      name: crb
+#      state: enabled
 
   - name: Install additional required packages including EPEL
     dnf:
