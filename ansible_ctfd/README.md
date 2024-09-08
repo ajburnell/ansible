@@ -33,6 +33,5 @@ sudo su -c \"echo 'ctfd ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ctfd\"
 ```bash
 python3 service_pass.py
 
-ANSIBLE_FORCE_COLOR=1 ansible-playbook --vault-password-file vault_password -u ctfd -i hosts.ini --private-key <LOCATION OF PRIVATE KEY> --ssh-common-args='-o StrictHostKeyChecking=no' playbook.yml -vv"
-  }`
+ANSIBLE_FORCE_COLOR=1 ansible-playbook --vault-password-file vault_password -u ctfd -i hosts.ini --private-key <LOCATION OF PRIVATE KEY> --ssh-common-args='-o StrictHostKeyChecking=no' playbook.yml -vv
 ```
