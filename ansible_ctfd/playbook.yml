@@ -1,0 +1,294 @@
+## Configure a CTFd server with gunicorn and NGINX ##
+## Tested working with Ubuntu on AWS and with Vagrant ##
+
+## Uncomment certbot when testing finised ##
+
+# https://nopresearcher.github.io/Deploying-CTFd/
+# https://github.com/CTFd/CTFd/wiki/Advanced-Deployment
+
+- hosts: ctfd
+
+  pre_tasks:
+  - name: Update cache.
+    apt: update_cache=yes
+
+  - name: Upgrade all packages.
+    apt:
+      name: "*"
+      state: latest
+  become: yes
+
+  tasks:
+  - name: Install required modules.
+    apt:
+      name:
+        - git
+        - unzip
+        - python3-pip
+        - curl
+        - python-setuptools
+        - virtualenv
+        - nginx
+        - mariadb-server
+        - tmux
+        - build-essential
+        - libffi-dev
+        - redis
+        - python3-mysqldb
+    become: yes
+
+  ### REDIS ###
+  - name: Configure Redis user and and enable the cache.
+    block:
+      # Redis default binds only to localhost. But we add ACLs for CTFd anyway.
+      - name: Create Redis user cache ACL.
+        copy:
+          dest: "/etc/redis/users.acl"
+          content: "user {{ ctfd_system_user }} on +@all -DEBUG ~* >{{ service_pass }}"
+          owner: redis
+          group: redis
+
+      - name: Enable the use of the Redis user cache ACL.
+        lineinfile:
+          path: "/etc/redis/redis.conf"
+          regexp: '^# aclfile'
+          line: "aclfile /etc/redis/users.acl"
+  
+      - name: Restart the Redis cache.
+        service:
+          name: redis
+          state: restarted
+    become: yes
+
+  ### MARIA DB ###
+  - name: Secure the MariaDB database server.
+    block: 
+      # Ref: https://stackoverflow.com/questions/16444306/ansible-idempotent-mysql-installation-playbook
+      - name: Change MariaDB root password...
+        community.mysql.mysql_user: 
+          name: root
+          password: "{{ service_pass }}"
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          host_all: true
+
+      # Required for idempotency...
+      - name: Copy .my.cnf file with root password credentials
+        template: 
+          src: templates/my.cnf.j2
+          dest: "/root/.my.cnf" 
+          owner: "root"
+          mode: 0600
+
+      - name: Remove all anonymous database user accounts
+        community.mysql.mysql_user: 
+          name: ''
+          host_all: true
+          state: absent
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+          
+      - name: Remove remote login for database user root
+        community.mysql.mysql_query:
+          query: DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+
+      - name: Remove test database
+        community.mysql.mysql_db:
+          name: test
+          state: absent
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"   
+          login_password: "{{ service_pass }}"
+
+      - name: Flush privileges;
+        community.mysql.mysql_query:
+          query: "FLUSH PRIVILEGES;"
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+
+  ### CTFD ###
+  - name: Download and configure CTFd server.
+    block:
+      - name: Create CTFd folder.
+        file:
+          path: "{{ ctfd_location }}"
+          state: directory
+
+      - name: Clone CTFd git repository.
+        git:
+          repo: "https://github.com/CTFd/CTFd"
+          clone: true
+          dest: "{{ ctfd_location }}"
+          force: true
+
+      - name: Set owner of ctfd web root.
+        file:
+          owner: "{{ ctfd_system_user }}"
+          group: "www-data"
+          recurse: yes
+          path: "{{ ctfd_location }}"
+
+      - name: Install requirements with pip.
+        pip:
+          requirements: "{{ ctfd_location }}/requirements.txt"
+          virtualenv: "{{ ctfd_location }}/venv"
+
+      - name: Create logging locations for ctfd service.
+        file:
+          path: "/var/log/ctfd/"
+          state: directory
+          owner: ctfd
+          group: www-data
+
+      - name: Add Redis details to CTFd configuration.
+        lineinfile:
+          path: "{{ ctfd_location }}/CTFd/config.ini"
+          regexp: '^REDIS_URL ='
+          line: "REDIS_URL = redis://{{ ctfd_system_user }}:{{ service_pass }}@localhost:6379"
+    
+      - name: Insert MariaDB creds into CTFd configuration.
+        lineinfile:
+          path: "{{ ctfd_location }}/CTFd/config.ini"
+          regexp: '^DATABASE_URL ='
+          line: "DATABASE_URL = mysql+pymysql://root:{{ service_pass }}@localhost/ctfd"
+      
+  ### GUNICORN ###
+  - name: Configure gunicorn service and enable
+    block:
+      ## We increase the keep-alive as it's sitting behind NGINX ##
+      ## Ref: https://docs.gunicorn.org/en/stable/settings.html ##
+      ## Recommended workers is 2-4 x CPU_CORES
+      ## Value is set based on a 4 VCPU AWS/GCP host.
+      ## Ref: https://medium.com/building-the-system/gunicorn-3-means-of-concurrency-efbb547674b7
+    
+      - name: Create the gunicorn ctfd system unit service file.
+        template:
+          src: "./templates/ctfd.service.j2"
+          dest: "/etc/systemd/system/ctfd.service"
+          mode: 0644
+
+      - name: Enable and start the CTFd service.
+        service:
+          name: ctfd
+          state: started
+          enabled: true
+    become: yes
+
+  ## NGINX ##
+  ## Ref: https://docs.gunicorn.org/en/latest/deploy.html ##
+  - name: Configure NGINX and restart service
+    block:
+      - name: Create the NGINX site configuration.
+        template:
+          src: "./templates/nginx.site.j2"
+          dest: "/etc/nginx/sites-available/{{ ctfd_domain_name }}"
+          mode: 0644
+        become: yes
+  
+      - name: Link the new NGINX configuration.
+        file:
+          src: "/etc/nginx/sites-available/{{ ctfd_domain_name }}"
+          dest: "/etc/nginx/sites-enabled/{{ ctfd_domain_name }}"
+          state: link
+    
+      - name: Remove NGINX default configurations
+        file:
+          path: "{{ item }}"
+          state: absent
+        with_items:
+            - "/etc/nginx/sites-available/default"
+            - "/etc/nginx/sites-enabled/default"
+
+  ### SSL CERTIFICATES ###
+  - name: Install Let's Encrypt certbot and generate certificate
+    block:
+        - name: Install Let's Encrypt.
+          pip:
+            state: present
+            name:
+              - certbot
+              - certbot-nginx
+
+        # Comment out when testing due to rate limiting.of 5 certs in one week for same domain.
+        #- name: Install SSL certificate with certbot
+        #  command: "sudo certbot --nginx -d {{ ctfd_domain_name }} -m {{ certbot_email }} --non-interactive --agree-tos"
+        #  register: certbot
+
+  ### IMPORT A CTFD SITE BACKUP IF PROVIDED ###
+  - name: Imports a CTFd site backup to configure site to a previous state.
+    block:
+
+      - name: Does a local backup file exist?
+        stat:
+          path: "{{ ctfd_backup }}"
+        register: local_backup_file
+
+      - name: Copy the backup file to the host.
+        copy:
+          src: "{{ ctfd_backup }}"
+          dest: "{{ ctfd_location }}/importme.zip"
+        when: local_backup_file.stat.exists == True
+        
+      - name: Did the backup copy succesfully?
+        stat:
+          path: "{{ ctfd_location }}/importme.zip"
+        register: remote_backup_file
+         
+      - name: Try and import the backup.
+        command: 
+          cmd: "python import.py importme.zip"
+          chdir:  "{{ ctfd_location }}"
+
+        environment:
+          PATH: "{{ ctfd_location }}/venv/bin"
+          
+        register: ctfd_import_backup
+        when: remote_backup_file.stat.exists == True
+
+      - name: Outcome of import task.
+        debug:
+          var: ctfd_import_backup
+        when: (ctfd_import_backup is defined) and (ctfd_import_backup|length > 0)
+        
+    when: (ctfd_backup is defined) and (ctfd_backup|length > 0)
+
+  ### RESTART SOME SERVICES ###
+  - name: Restart NGINX and gunicorn CTFd service.
+    block:
+      - name: Enable and start NGINX
+        service:
+          state: reloaded
+          enabled: true
+          name: nginx
+    
+      - name: Restart the CTFd service.
+        service:
+          name: ctfd
+          state: restarted
+    become: yes
+
+  ### FIREWALL ###
+  - name: Configure and enable firewall
+    block:
+      - name: Enable rate limiting on the SSH port to stop brute force attacks.
+        community.general.ufw:
+          rule: limit
+          port: ssh
+          proto: tcp
+          direction: in
+
+      - name: Allow http/s ports into the firewall.
+        community.general.ufw:
+          rule: allow
+          port: "{{ item }}"
+          proto: tcp
+          direction: in
+        with_items:
+          - 80
+          - 443
+    
+      - name: Enable the firewall and explicitly set default deny.
+        community.general.ufw:
+          state: enabled
+          policy: deny
+    become: yes
