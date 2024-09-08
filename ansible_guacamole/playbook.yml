@@ -72,7 +72,7 @@
     block: 
       - name: Start the MariaDB database service
         service:
-          name: mysql
+          name: mariadb
           state: started
           enabled: true
 
@@ -137,7 +137,7 @@
     ansible.builtin.get_url:
       url: https://dlcdn.apache.org/guacamole/1.5.5/source/guacamole-server-1.5.5.tar.gz
       dest: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}.tar.gz"
-      checksum: sha256:8251a4dcec11f0b878f836f8223e81aa049a937f70b06410d320e60acb727258
+      checksum: sha256:67499611c2e22d9c933763adc5408e716a4bfd08a3eb8a5ba2fc6f8f70868f6b
     become: yes
 
   - name: Extract the Guacamole source
@@ -147,30 +147,29 @@
     become: yes
 
   - name: Configure the Guacamole source
-    ansible.builtin.command:
-      command: "./configure --with-systemd-dir=/etc/systemd/system/"
-      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+    ansible.builtin.command: "./configure --with-systemd-dir=/etc/systemd/system/"
+    args:
+      chdir: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}"
     register: gaucamole_server_config
     become: yes
 
   - name: Compile the Guacamole server
     community.general.make:
-      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+      chdir: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}"
     become: yes
 
   - name: Install the Guacamole server
     community.general.make:
-      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+      chdir: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}"
       target: install
     become: yes
 
   - name: Run ldconfig
-    ansible.builtin.command:
-      command: "ldconfig"
+    ansible.builtin.command: "ldconfig"
     become: yes
 
   ### GUACAMOLE POST-INSTALLATION CONFIGURATION ###
-  - name: Create logging locations for ctfd service
+  - name: Create configuration folder for guac
     file:
       path: "/etc/guacamole/"
       state: directory
@@ -185,6 +184,6 @@
   - name: Daemon reload, then start and enable guacd service
     ansible.builtin.systemd_service:
       daemon_reload: true
-      state: start
+      state: started
       enabled: true
       name: guacd
