@@ -12,9 +12,9 @@ f = open("vault_password", "w")
 f.write (vault_password)
 f.close()
 
-f = open("./group_vars/guacamole_vault.yml", "w")
+f = open("./group_vars/avo/avo_vault.yml", "w")
 f.write("service_pass: \"" + service_password + "\"")
 f.close()
 
 # Add the service password to a vault
-ansible_vault = subprocess.run(["ansible-vault", "encrypt", "--vault-password-file", "vault_password", "./group_vars/guacamole_vault.yml"])
+ansible_vault = subprocess.run(["ansible-vault", "encrypt", "--vault-password-file", "vault_password", "./group_vars/avo/avo_vault.yml"])
