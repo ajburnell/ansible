@@ -70,12 +70,11 @@
     ### SECURE MARIA DB ###
   - name: Secure the MariaDB database server.
     block: 
-      - name: Restart the CTFd service.
+      - name: Start the MariaDB database service
         service:
           name: mysql
-          state: start
+          state: started
           enabled: true
-
 
       # Ref: https://stackoverflow.com/questions/16444306/ansible-idempotent-mysql-installation-playbook
       - name: Change MariaDB root password...
