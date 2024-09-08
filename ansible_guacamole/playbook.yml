@@ -14,7 +14,7 @@
       state: latest
 
   - name: Ensure the crb repository is enabled
-    dnf_config_manager:
+    community.general.dnf_config_manager:
       name: crb
       state: enabled
 
