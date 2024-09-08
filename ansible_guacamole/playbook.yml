@@ -70,12 +70,19 @@
     ### SECURE MARIA DB ###
   - name: Secure the MariaDB database server.
     block: 
+      - name: Restart the CTFd service.
+        service:
+          name: mysql
+          state: start
+          enabled: true
+
+
       # Ref: https://stackoverflow.com/questions/16444306/ansible-idempotent-mysql-installation-playbook
       - name: Change MariaDB root password...
         community.mysql.mysql_user: 
           name: root
           password: "{{ service_pass }}"
-          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_unix_socket: "/var/lib/mysql/mysql.sock"
           host_all: true
 
       # Required for idempotency...
@@ -91,26 +98,26 @@
           name: ''
           host_all: true
           state: absent
-          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_unix_socket: "/var/lib/mysql/mysql.sock"
           login_password: "{{ service_pass }}"
           
       - name: Remove remote login for database user root
         community.mysql.mysql_query:
           query: DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_unix_socket: "/var/lib/mysql/mysql.sock"
           login_password: "{{ service_pass }}"
 
       - name: Remove test database
         community.mysql.mysql_db:
           name: test
           state: absent
-          login_unix_socket: "/var/run/mysqld/mysqld.sock"   
+          login_unix_socket: "/var/lib/mysql/mysql.sock"   
           login_password: "{{ service_pass }}"
 
       - name: Flush privileges;
         community.mysql.mysql_query:
           query: "FLUSH PRIVILEGES;"
-          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_unix_socket: "/var/lib/mysql/mysql.sock"
           login_password: "{{ service_pass }}"
 
   ### FIREWALL ###
