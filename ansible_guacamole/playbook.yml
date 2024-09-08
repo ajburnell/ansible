@@ -42,7 +42,7 @@
   ### DEPENDENCIES ###
   tasks:
   - name: Install further packages for 
-    apt:
+    dnf:
       name:
         - cairo-devel
         - libjpeg-turbo-devel
