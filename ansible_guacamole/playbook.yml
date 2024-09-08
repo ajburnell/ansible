@@ -1,0 +1,178 @@
+## Configure an Apache Guacamole server with NGINX ##
+
+## Uncomment certbot when testing finised ##
+
+- hosts: avo
+
+  pre_tasks:
+  - name: Update cache.
+    dnf: update_cache=yes
+
+  - name: Upgrade all packages.
+    dnf:
+      name: "*"
+      state: latest
+
+  - name: Ensure the crb repository is enabled
+    dnf_config_manager:
+      name: crb
+      state: enabled
+
+  - name: Install additional required packages including EPEL
+    dnf:
+      name:
+        - wget
+        - vim
+        - epel-release
+        - dnf-utils
+
+  - name: Install RPM Fusion repositories
+    dnf:
+      disable_gpg_check: true
+      name:
+        - https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm
+        - https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm
+  become: yes
+
+  ### DEPENDENCIES ###
+  tasks:
+  - name: Install further packages for 
+    apt:
+      name:
+        - cairo-devel
+        - libjpeg-turbo-devel
+        - libjpeg-devel
+        - libpng-devel
+        - libtool
+        - libuuid-devel
+        - uuid-devel
+        - ffmpeg-devel
+        - freerdp-devel
+        - pango-devel
+        - libssh2-devel
+        - libwebsockets-devel
+        - pulseaudio-libs-devel
+        - openssl-devel
+        - java-11-openjdk-devel
+        - tomcat
+        - mariadb-server
+        - nginx
+        - certbot
+        - python3-certbot-nginx
+    become: yes
+
+    ### SECURE MARIA DB ###
+  - name: Secure the MariaDB database server.
+    block: 
+      # Ref: https://stackoverflow.com/questions/16444306/ansible-idempotent-mysql-installation-playbook
+      - name: Change MariaDB root password...
+        community.mysql.mysql_user: 
+          name: root
+          password: "{{ service_pass }}"
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          host_all: true
+
+      # Required for idempotency...
+      - name: Copy .my.cnf file with root password credentials
+        template: 
+          src: templates/my.cnf.j2
+          dest: "/root/.my.cnf" 
+          owner: "root"
+          mode: 0600
+
+      - name: Remove all anonymous database user accounts
+        community.mysql.mysql_user: 
+          name: ''
+          host_all: true
+          state: absent
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+          
+      - name: Remove remote login for database user root
+        community.mysql.mysql_query:
+          query: DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+
+      - name: Remove test database
+        community.mysql.mysql_db:
+          name: test
+          state: absent
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"   
+          login_password: "{{ service_pass }}"
+
+      - name: Flush privileges;
+        community.mysql.mysql_query:
+          query: "FLUSH PRIVILEGES;"
+          login_unix_socket: "/var/run/mysqld/mysqld.sock"
+          login_password: "{{ service_pass }}"
+
+  ### FIREWALL ###
+  - name: Permit HTTP traffic in default zone
+    ansible.posix.firewalld:
+      service: http
+      permanent: true
+      state: enabled
+
+  - name: Permit HTTPS traffic in default zone
+    ansible.posix.firewalld:
+      service: https
+      permanent: true
+      state: enabled
+
+  ### WHOLY MOLY GUACAMOLE PREP AND INSTALL ###
+  - name: Download Guacamole source
+    ansible.builtin.get_url:
+      url: https://dlcdn.apache.org/guacamole/1.5.5/source/guacamole-server-1.5.5.tar.gz
+      dest: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}.tar.gz"
+      checksum: sha256:8251a4dcec11f0b878f836f8223e81aa049a937f70b06410d320e60acb727258
+    become: yes
+
+  - name: Extract the Guacamole source
+    ansible.builtin.unarchive:
+      src: "{{ guacamole_src_dir }}/guacamole-server-{{ guacamole_version }}.tar.gz"
+      dest: "{{ guacamole_src_dir }}"
+    become: yes
+
+  - name: Configure the Guacamole source
+    ansible.builtin.command:
+      command: "./configure --with-systemd-dir=/etc/systemd/system/"
+      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+    register: gaucamole_server_config
+    become: yes
+
+  - name: Compile the Guacamole server
+    community.general.make:
+      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+    become: yes
+
+  - name: Install the Guacamole server
+    community.general.make:
+      chdir: "{{ guacamnole_src_dir }}/guacamole-server-{{ guacamole_version }}"
+      target: install
+    become: yes
+
+  - name: Run ldconfig
+    ansible.builtin.command:
+      command: "ldconfig"
+    become: yes
+
+  ### GUACAMOLE POST-INSTALLATION CONFIGURATION ###
+  - name: Create logging locations for ctfd service
+    file:
+      path: "/etc/guacamole/"
+      state: directory
+    become: yes
+
+  - name: Create the guacd configuration
+    template:
+      src: "./templates/guacd.conf.j2"
+      dest: "/etc/guacamole/guacd.conf"
+    become: yes
+
+  - name: Daemon reload, then start and enable guacd service
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+      state: start
+      enabled: true
+      name: guacd

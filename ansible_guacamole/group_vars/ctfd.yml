@@ -1,0 +1,15 @@
+# What version to download and install.
+guacamole_version: "1.5.5"
+
+# Location to download source too for compilation.
+guacamole_src_dir: "/usr/src"
+
+# Server name for guacamole.
+guacamole_server_name: "avo.ablab.com.au"
+
+# Fully qualified domain name.
+# Used for naming NGINX config files and for certbot certificate request to Let's Encrypt.
+ctfd_domain_name: "avo.ablab.com.au"
+
+# The email to be provided to Certbot to get a Let's Encrypt certificate.
+certbot_email: "xenoc17299@sparkroi.com"
