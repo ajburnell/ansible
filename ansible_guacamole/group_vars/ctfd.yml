@@ -7,9 +7,9 @@ guacamole_src_dir: "/usr/src"
 # Server name for guacamole.
 guacamole_server_name: "avo.ablab.com.au"
 
-# Fully qualified domain name.
-# Used for naming NGINX config files and for certbot certificate request to Let's Encrypt.
-ctfd_domain_name: "avo.ablab.com.au"
+# RPM Fusion URLs for the required OS version:
+rpmfusion_free_url: "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-9.noarch.rpm"
+rpmfusion_nonfree_url: "https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-9.noarch.rpm"
 
 # The email to be provided to Certbot to get a Let's Encrypt certificate.
 certbot_email: "xenoc17299@sparkroi.com"

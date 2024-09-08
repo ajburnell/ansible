@@ -1,6 +1,8 @@
 ## Configure an Apache Guacamole server with NGINX ##
-
 ## Uncomment certbot when testing finised ##
+
+# Local Testing:
+# ansible-playbook -i hosts.ini --vault-password-file vault_password --connection=local playbook.yml -vv
 
 - hosts: avo
 
@@ -29,14 +31,12 @@
   - name: Install RPM Fusion repositories free 
     dnf:
       disable_gpg_check: true
-      name:
-        - "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm"
+      name: "{{ rpmfusion_free_url }}"
 
   - name: Install RPM Fusion repositories non-free
     dnf:
       disable_gpg_check: true
-      name:
-        - "https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm"
+      name: " {{ rpmfusion_nonfree_url }} " 
   become: yes
 
   ### DEPENDENCIES ###
