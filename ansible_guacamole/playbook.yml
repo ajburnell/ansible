@@ -26,12 +26,17 @@
         - epel-release
         - dnf-utils
 
-  - name: Install RPM Fusion repositories
+  - name: Install RPM Fusion repositories free 
     dnf:
       disable_gpg_check: true
       name:
-        - https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm
-        - https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm
+        - "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm"
+
+  - name: Install RPM Fusion repositories non-free
+    dnf:
+      disable_gpg_check: true
+      name:
+        - "https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm"
   become: yes
 
   ### DEPENDENCIES ###
